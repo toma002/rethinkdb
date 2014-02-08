@@ -2394,19 +2394,29 @@ module 'DataExplorerView', ->
 
                 @index++
                 if rdb_query instanceof @TermBaseConstructor
-                    @skip_value = 0
-                    @start_time = new Date()
-                    @current_results = []
-
                     @id_execution++ # Update the id_execution and use it to tag the callbacks
                     rdb_global_callback = @generate_rdb_global_callback @id_execution
-                    # Date are displayed in their raw format for now.
-                    @state.last_query_has_profile = @state.options.profiler
-                    rdb_query.private_run {connection: @driver_handler.connection, timeFormat: "raw", profile: @state.options.profiler}, rdb_global_callback # @rdb_global_callback can be fire more than once
-                    return true
-                else if rdb_query instanceof DataExplorerView.DriverHandler
-                    # Nothing to do
-                    return true
+                    @driver_handler.create_connection (error, connection) =>
+                        if error?
+                            #TODO Handle error
+                            console.log error
+                        else
+                            @skip_value = 0
+                            @start_time = new Date()
+                            @current_results = []
+
+                            # Date are displayed in their raw format for now.
+                            @state.last_query_has_profile = @state.options.profiler
+                            try
+                                rdb_query.private_run
+                                    connection: connection
+                                    timeFormat: "raw"
+                                    batch_conf: 200
+                                    profile: @state.options.profiler
+                                , rdb_global_callback # @rdb_global_callback can be fire more than once
+                            catch err
+                                debugger
+                    break
                 else
                     @non_rethinkdb_query += @queries[@index-1]
                     if @index is @queries.length
@@ -3679,8 +3689,7 @@ module 'DataExplorerView', ->
 
         # I don't want that thing in window
         constructor: (args) ->
-            @on_success = args.on_success
-            @on_fail = args.on_fail
+            @id_connection = 1
 
             if window.location.port is ''
                 if window.location.protocol is 'https:'
@@ -3696,7 +3705,6 @@ module 'DataExplorerView', ->
                 pathname: window.location.pathname
 
             @hack_driver()
-            @connect()
         
         # Hack the driver, remove .run() and private_run()
         hack_driver: =>
@@ -3708,32 +3716,29 @@ module 'DataExplorerView', ->
                     throw that.query_error_template
                         found_run: true
 
-        connect: =>
-            that = @
-
+        create_connection: (cb) =>
             if @connection?
-                if @driver_status is 'connected'
-                    try
-                        @connection.close()
-                    catch err
-                        # Nothing bad here, let's just not pollute the console
+                clearInterval @interval
+                if @connection? and _.keys(@connection.outstandingCallbacks).length is 0
+
+                    console.log 'Closing'
+                    @connection.close()
+                else # connection busy or not open.
+                    @connection.on 'response', ->
+                        console.log 'Got response, closing'
+                        @close()
             try
-                r.connect @server, @connect_callback
+                wrapped_cb = ( (id_connection) ->
+                    (error, connection) =>
+                        cb(error, connection)
+                        if @id_connection is id_connection
+                            @connection = connection
+                )(@id_connection++)
+                r.connect @server, wrapped_cb
    
                 @interval = setInterval @ping, @ping_time
             catch err
                 @on_fail(err)
-
-        # Callback for r.connect
-        connect_callback: (err, connection) =>
-         if err?
-            @.on_fail(err)
-         else
-            @connection = connection
-            @on_success(connection)
-
-            connection.removeAllListeners 'error'
-            connection.on 'error', @on_fail
 
     
         # Makre sure the connection doesn't die
@@ -3748,4 +3753,4 @@ module 'DataExplorerView', ->
                 @connection.close()
             catch err
                 # Nothing bad here, let's just not pollute the console
-            clearTimeout @interval
+            clearInterval @interval
