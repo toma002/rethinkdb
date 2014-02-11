@@ -71,6 +71,11 @@ configure () {
     var GCC_ARCH $(uname -m | grep '^[A-Za-z0-9_]*$' | head -n 1)
     var GCC_ARCH_REDUCED $(echo "$GCC_ARCH" | sed -e 's/^i[56]86$$/i486/g')
     var DEB_ARCH $(echo "${GCC_ARCH_REDUCED:-}" | sed -e 's/^x86_64$$/amd64/g')
+    if [[ $(uname -m) == arm* ]]; then
+        echo "***** Warning *****"
+        echo "Building and running on ARM should work, but it is not officially supported. Some features may not work."
+        echo "*******************"
+    fi;
     require "Use ccache"
     boolvar USE_CCACHE $use_ccache
     check_cxx
