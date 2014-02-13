@@ -277,7 +277,7 @@ def check_driver():
     Make sure we are using the C++ backend.
     Exit if we don't
     """
-    if r.protobuf_implementation == 'py':
+    if r.protobuf_implementation == 'python':
         print "Please install the C++ backend for the tests."
         sys.stdout.flush()
         exit(1)
