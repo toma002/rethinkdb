@@ -45,13 +45,12 @@ class test_txn_t;
 
 class test_cache_t : public page_cache_t {
 public:
-    test_cache_t(serializer_t *serializer, alt_memory_tracker_t *tracker)
-        : page_cache_t(serializer, page_cache_config_t(), tracker),
-          tracker_(tracker) { }
-    test_cache_t(serializer_t *serializer, alt_memory_tracker_t *tracker,
-                 uint64_t memory_limit)
-        : page_cache_t(serializer, make_config(memory_limit), tracker),
-          tracker_(tracker) { }
+    explicit test_cache_t(mock_ser_t *mock)
+        : page_cache_t(mock->ser.get(), page_cache_config_t(), mock->tracker.get()),
+          tracker_(mock->tracker.get()) { }
+    test_cache_t(mock_ser_t *mock, uint64_t memory_limit)
+        : page_cache_t(mock->ser.get(), make_config(memory_limit), mock->tracker.get()),
+          tracker_(mock->tracker.get()) { }
 
     void flush(scoped_ptr_t<test_txn_t> txn) {
         flush_and_destroy_txn(std::move(txn), &reset_tracker_acq);
@@ -133,7 +132,7 @@ TEST(PageTest, Control) {
 
 void run_CreateDestroy() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
 }
 
 TEST(PageTest, CreateDestroy) {
@@ -142,7 +141,7 @@ TEST(PageTest, CreateDestroy) {
 
 void run_OneTxn() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn = make_scoped<test_txn_t>(&page_cache);
     page_cache.flush(std::move(txn));
 }
@@ -153,7 +152,7 @@ TEST(PageTest, OneTxn) {
 
 void run_TwoIndependentTxn() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn1 = make_scoped<test_txn_t>(&page_cache);
     auto txn2 = make_scoped<test_txn_t>(&page_cache);
     page_cache.flush(std::move(txn2));
@@ -166,7 +165,7 @@ TEST(PageTest, TwoIndependentTxn) {
 
 void run_TwoIndependentTxnSwitch() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn1 = make_scoped<test_txn_t>(&page_cache);
     auto txn2 = make_scoped<test_txn_t>(&page_cache);
     page_cache.flush(std::move(txn1));
@@ -179,7 +178,7 @@ TEST(PageTest, TwoIndependentTxnSwitch) {
 
 void run_TwoSequentialTxnSwitch() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn1 = make_scoped<test_txn_t>(&page_cache);
     auto txn2 = make_scoped<test_txn_t>(&page_cache);
     page_cache.flush(std::move(txn1));
@@ -192,7 +191,7 @@ TEST(PageTest, TwoSequentialTxnSwitch) {
 
 void run_OneWriteAcq() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn = make_scoped<test_txn_t>(&page_cache);
     {
         current_test_acq_t acq(txn.get(), 0, access_t::write, page_create_t::yes);
@@ -208,7 +207,7 @@ TEST(PageTest, OneWriteAcq) {
 
 void run_OneWriteAcqOneReadAcq() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn1 = make_scoped<test_txn_t>(&page_cache);
     {
         current_test_acq_t acq(txn1.get(), 0, access_t::write, page_create_t::yes);
@@ -230,7 +229,7 @@ TEST(PageTest, OneWriteAcqOneReadAcq) {
 
 void run_OneWriteAcqWait() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     auto txn = make_scoped<test_txn_t>(&page_cache);
     {
         current_test_acq_t acq(txn.get(), alt_create_t::create);
@@ -292,7 +291,7 @@ void ReadAfterWrite_cases(ReadAfterWrite_state_t *s, test_cache_t *cache, int i)
 
 void run_ReadAfterWrite() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     ReadAfterWrite_state_t s;
     pmap(2, std::bind(&ReadAfterWrite_cases, &s, &page_cache, ph::_1));
 }
@@ -341,7 +340,7 @@ void WriteWaitForFlush_cases(WriteWaitForFlush_state_t *s, test_cache_t *cache, 
 
 void run_WriteWaitForFlush() {
     mock_ser_t mock;
-    test_cache_t page_cache(mock.ser.get(), mock.tracker.get());
+    test_cache_t page_cache(&mock);
     WriteWaitForFlush_state_t s;
     pmap(2, std::bind(&WriteWaitForFlush_cases, &s, &page_cache, ph::_1));
 }
@@ -362,7 +361,7 @@ public:
 
     void run() {
         {
-            test_cache_t cache(mock.ser.get(), mock.tracker.get(), memory_limit);
+            test_cache_t cache(&mock, memory_limit);
             auto_drainer_t drain;
             c = &cache;
 
@@ -407,7 +406,7 @@ public:
         c = NULL;
 
         {
-            test_cache_t cache(mock.ser.get(), mock.tracker.get(), memory_limit);
+            test_cache_t cache(&mock, memory_limit);
             auto_drainer_t drain;
             c = &cache;
             coro_t::spawn_ordered(std::bind(&bigger_test_t::run_txn14,
@@ -418,7 +417,7 @@ public:
         c = NULL;
 
         {
-            test_cache_t cache(mock.ser.get(), mock.tracker.get(), memory_limit);
+            test_cache_t cache(&mock, memory_limit);
             c = &cache;
             auto txn = make_scoped<test_txn_t>(c);
 
