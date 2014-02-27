@@ -583,6 +583,7 @@ void current_page_t::make_non_deleted(block_size_t block_size,
                                       page_cache_t *page_cache) {
     rassert(is_deleted_);
     rassert(!page_.has());
+    rassert(acquirers_.empty());
     is_deleted_ = false;
     page_.init(new page_t(block_size, std::move(buf), page_cache), page_cache);
 }
