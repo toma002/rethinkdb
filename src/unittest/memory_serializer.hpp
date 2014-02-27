@@ -24,6 +24,8 @@ public:
                                                  &opener,
                                                  &get_global_perfmon_collection());
     }
+
+    DISABLE_COPYING(memory_serializer_t);
 };
 
 
