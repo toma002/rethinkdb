@@ -19,7 +19,7 @@ using alt::page_create_t;
 using alt::page_t;
 using alt::page_txn_t;
 
-namespace unittest {
+namespace unittest { namespace page_test {
 
 class mock_ser_t {
 public:
@@ -1221,4 +1221,4 @@ TEST(PageTest, BiggerTestNoMemory) {
     run_in_thread_pool(run_BiggerTestNoMemory, 4);
 }
 
-}  // namespace unittest
+} }  // namespace page_test::unittest

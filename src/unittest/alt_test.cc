@@ -2,8 +2,9 @@
 #include "buffer_cache/alt/alt.hpp"
 #include "unittest/gtest.hpp"
 #include "unittest/memory_serializer.hpp"
+#include "unittest/unittest_utils.hpp"
 
-namespace unittest {
+namespace unittest { namespace alt_test {
 
 class wrapper_t : public memory_serializer_t, public cache_t {
 public:
@@ -12,4 +13,12 @@ public:
                           &get_global_perfmon_collection()) { }
 };
 
-}  // namespace unittest
+void run_CreateDestroy() {
+    wrapper_t c;
+}
+
+TEST(AltTest, CreateDestroy) {
+    run_in_thread_pool(run_CreateDestroy, 4);
+}
+
+} }  // namespace unittest::alt_test
