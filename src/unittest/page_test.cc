@@ -24,11 +24,7 @@ namespace unittest {
 class mock_ser_t {
 public:
     memory_serializer_t ser;
-    scoped_ptr_t<alt_memory_tracker_t> tracker;
-
-    mock_ser_t() {
-        tracker = make_scoped<alt_memory_tracker_t>();
-    }
+    alt_memory_tracker_t tracker;
 };
 
 void reset_tracker_acq(alt::tracker_acq_t *acq) {
@@ -40,11 +36,11 @@ class test_txn_t;
 class test_cache_t : public page_cache_t {
 public:
     explicit test_cache_t(mock_ser_t *mock)
-        : page_cache_t(mock->ser.get(), page_cache_config_t(), mock->tracker.get()),
-          tracker_(mock->tracker.get()) { }
+        : page_cache_t(mock->ser.get(), page_cache_config_t(), &mock->tracker),
+          tracker_(&mock->tracker) { }
     test_cache_t(mock_ser_t *mock, uint64_t memory_limit)
-        : page_cache_t(mock->ser.get(), make_config(memory_limit), mock->tracker.get()),
-          tracker_(mock->tracker.get()) { }
+        : page_cache_t(mock->ser.get(), make_config(memory_limit), &mock->tracker),
+          tracker_(&mock->tracker) { }
 
     void flush(scoped_ptr_t<test_txn_t> txn) {
         flush_and_destroy_txn(std::move(txn), &reset_tracker_acq);
