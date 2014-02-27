@@ -9,7 +9,7 @@
 #include "containers/scoped.hpp"
 #include "serializer/config.hpp"
 #include "unittest/gtest.hpp"
-#include "unittest/mock_file.hpp"
+#include "unittest/memory_serializer.hpp"
 #include "unittest/unittest_utils.hpp"
 
 using alt::current_page_acq_t;
@@ -21,18 +21,12 @@ using alt::page_txn_t;
 
 namespace unittest {
 
-struct mock_ser_t {
-    mock_file_opener_t opener;
-    scoped_ptr_t<standard_serializer_t> ser;
+class mock_ser_t {
+public:
+    memory_serializer_t ser;
     scoped_ptr_t<alt_memory_tracker_t> tracker;
 
-    mock_ser_t()
-        : opener() {
-        standard_serializer_t::create(&opener,
-                                      standard_serializer_t::static_config_t());
-        ser = make_scoped<standard_serializer_t>(log_serializer_t::dynamic_config_t(),
-                                                 &opener,
-                                                 &get_global_perfmon_collection());
+    mock_ser_t() {
         tracker = make_scoped<alt_memory_tracker_t>();
     }
 };
