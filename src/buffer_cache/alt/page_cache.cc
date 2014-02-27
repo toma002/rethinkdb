@@ -6,6 +6,7 @@
 
 #include "arch/runtime/coroutines.hpp"
 #include "concurrency/auto_drainer.hpp"
+#include "debug.hpp"
 #include "do_on_thread.hpp"
 #include "serializer/serializer.hpp"
 #include "stl_utils.hpp"
@@ -936,6 +937,7 @@ void page_txn_t::announce_waiting_for_flush() {
 
 std::map<block_id_t, page_cache_t::block_change_t>
 page_cache_t::compute_changes(const std::set<page_txn_t *> &txns) {
+    debugf("compute_changes on %zu txns\n", txns.size());
     // We combine changes, using the block_version_t value to see which change
     // happened later.  This even works if a single transaction acquired the same
     // block twice.

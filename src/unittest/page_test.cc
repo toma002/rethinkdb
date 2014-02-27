@@ -295,6 +295,67 @@ TPTEST(PageTest, WriteWaitForFlush, 4) {
     pmap(2, std::bind(&WriteWaitForFlush_cases, &s, &page_cache, ph::_1));
 }
 
+// RSI: Right now this test is useless, because we can't control std::less<page_txn_t
+// *> ordering in the std::set<page_txn_t *> sets used in the page cache.  Also, the
+// txns aren't being flushed simultaneously.
+TPTEST(PageTest, RecencyReversal, 4) {
+    mock_ser_t mock;
+    test_cache_t page_cache(&mock);
+    repli_timestamp_t t0 = repli_timestamp_t::distant_past.next();
+    repli_timestamp_t t1 = t0.next();
+    repli_timestamp_t t2 = t1.next();
+    scoped_ptr_t<test_txn_t> txn[4];
+    txn[0] = make_scoped<test_txn_t>(&page_cache, t0);
+    txn[1] = make_scoped<test_txn_t>(&page_cache, t1);
+    txn[2] = make_scoped<test_txn_t>(&page_cache, t2);
+    txn[3] = make_scoped<test_txn_t>(&page_cache, t1);
+
+    {
+        auto acq0 = make_scoped<current_test_acq_t>(txn[0].get(), alt_create_t::create);
+        const block_id_t block_id = acq0->block_id();
+        auto acq1 = make_scoped<current_test_acq_t>(txn[1].get(), block_id,
+                                                    access_t::write);
+        auto acq2 = make_scoped<current_test_acq_t>(txn[2].get(), block_id,
+                                                    access_t::write);
+
+        acq1.reset();
+        acq2.reset();
+
+        auto acq3 = make_scoped<current_test_acq_t>(txn[3].get(), block_id,
+                                                    access_t::write);
+        acq0->write_acq_signal()->wait();
+        acq0.reset();
+        acq3->write_acq_signal()->wait();
+        acq3.reset();
+    }
+
+    {
+        // Acquire a different block in reverse order, so that all the txns must get
+        // flushed simultaneously.
+        auto acq3 = make_scoped<current_test_acq_t>(txn[3].get(), alt_create_t::create);
+        const block_id_t block_id = acq3->block_id();
+        auto acq2 = make_scoped<current_test_acq_t>(txn[2].get(), block_id,
+                                                    access_t::write);
+        auto acq1 = make_scoped<current_test_acq_t>(txn[1].get(), block_id,
+                                                    access_t::write);
+        auto acq0 = make_scoped<current_test_acq_t>(txn[0].get(), block_id,
+                                                    access_t::write);
+        acq3->write_acq_signal()->wait();
+        acq3.reset();
+        acq2->write_acq_signal()->wait();
+        acq2.reset();
+        acq1->write_acq_signal()->wait();
+        acq1.reset();
+        acq0->write_acq_signal()->wait();
+        acq0.reset();
+    }
+
+    page_cache.flush(std::move(txn[0]));
+    page_cache.flush(std::move(txn[1]));
+    page_cache.flush(std::move(txn[2]));
+    page_cache.flush(std::move(txn[3]));
+}
+
 class bigger_test_t {
 public:
     explicit bigger_test_t(uint64_t _memory_limit)
