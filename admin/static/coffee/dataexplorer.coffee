@@ -3229,23 +3229,42 @@ module 'DataExplorerView', ->
 
  
         date_to_string: (date) =>
-            if date.timezone?
-                timezone = date.timezone
-                
-                # Extract data from the timezone
-                timezone_array = date.timezone.split(':')
-                sign = timezone_array[0][0] # Keep the sign
-                timezone_array[0] = timezone_array[0].slice(1) # Remove the sign
+            timezone = date.timezone
+            
+            # Extract data from the timezone
+            timezone_array = date.timezone.split(':')
+            sign = timezone_array[0][0] # Keep the sign
+            timezone_array[0] = timezone_array[0].slice(1) # Remove the sign
 
-                # Save the timezone in minutes
-                timezone_int = (parseInt(timezone_array[0])*60+parseInt(timezone_array[1]))*60
-                if sign is '-'
-                    timezone_int = -1*timezone_int
-                # Add the user local timezone
-                timezone_int += (new Date()).getTimezoneOffset()*60
-            else
-                timezone = '+00:00'
-                timezone_int = (new Date()).getTimezoneOffset()*60
+            # Save the timezone in minutes
+            timezone_int = (parseInt(timezone_array[0])*60+parseInt(timezone_array[1]))*60
+            if sign is '-'
+                timezone_int = -1*timezone_int
+            # Add the user local timezone
+            timezone_int += (new Date()).getTimezoneOffset()*60
+
+            # Precompute Jan 1st and July 1st of this month
+            jan = new Date((new Date()).getFullYear(), 0, 1)
+            jul = new Date((new Date()).getFullYear(), 6, 1)
+
+            # Create the date we want to display
+            d = new Date(0)
+            d.setUTCSeconds(date.epoch_time)
+
+            # Now
+            now = new Date()
+
+            if jan.getTimezoneOffset() > jul.getTimezoneOffset() # North hemisphere with daylight savings
+                if d.getTimezoneOffset() is jul.getTimezoneOffset() # The date we want to display should consider dailight saving time
+                    timezone_int -= 60*60
+                if now.getTimezoneOffset() is jul.getTimezoneOffset() # We are now in dailight saving time
+                    timezone_int += 60*60
+            else if jan.getTimezoneOffset() < jul.getTimezoneOffset() # South hemisphere with daylights savings
+                if d.getTimezoneOffset() is jan.getTimezoneOffset() # The date we want to display should consider dailight saving time
+                    timezone_int -= 60*60
+                if now.getTimezoneOffset() is jan.getTimezoneOffset() # We are now in dailight saving time
+                    timezone_int += 60*60
+            # else no daylight savings
 
             # Tweak epoch and create a date
             raw_date_str = (new Date((date.epoch_time+timezone_int)*1000)).toString()
