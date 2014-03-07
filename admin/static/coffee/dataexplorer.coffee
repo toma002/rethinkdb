@@ -2433,7 +2433,7 @@ module 'DataExplorerView', ->
                         if (error)
                             @error_on_connect error
                         else
-                            rdb_query.private_run connection, {timeFormat: "raw", profile: @state.options.profiler}, rdb_global_callback # @rdb_global_callback can be fired more than once
+                            rdb_query.private_run connection, {timeFormat: "raw", groupFormat: "raw", profile: @state.options.profiler}, rdb_global_callback # @rdb_global_callback can be fired more than once
                     , @id_execution, @error_on_connect
 
                     return true
@@ -2875,7 +2875,14 @@ module 'DataExplorerView', ->
             @container.state.view = view
             @render_result()
 
+        replace_grouped_data: (result) ->
+            native_data = []
+            for group in result.data
+                native_data.push
+                    group: group[0]
+                    reduction: group[1]
 
+            native_data
 
         # We build the tree in a recursive way
         json_to_node: (value) =>
@@ -2901,37 +2908,38 @@ module 'DataExplorerView', ->
                     sub_values[sub_values.length-1]['no_comma'] = true
                     return @template_json_tree.array
                         values: sub_values
-            else if value_type is 'object' and value.$reql_type$ is 'TIME' and value.epoch_time?
-                return @template_json_tree.span
-                    classname: 'jt_date'
-                    value: @date_to_string(value)
-            else if value_type is 'object'
-                sub_keys = []
-                for key of value
-                    sub_keys.push key
-                sub_keys.sort()
+            else if Object::toString.call(value) is '[object Object]'
+                if value.$reql_type$ is 'TIME'
+                    return @template_json_tree.span
+                        classname: 'jt_date'
+                        value: @date_to_string(value)
+                else
+                    sub_keys = []
+                    for key of value
+                        sub_keys.push key
+                    sub_keys.sort()
 
-                sub_values = []
-                for key in sub_keys
-                    last_key = key
-                    sub_values.push
-                        key: key
-                        value: @json_to_node value[key]
-                    # We don't add a coma for url and emails, because we put it in value (value = url, >>)
-                    if typeof value[key] is 'string' and ((/^(http|https):\/\/[^\s]+$/i.test(value[key]) or /^[a-z0-9._-]+@[a-z0-9]+.[a-z0-9._-]{2,4}/i.test(value[key])))
+                    sub_values = []
+                    for key in sub_keys
+                        last_key = key
+                        sub_values.push
+                            key: key
+                            value: @json_to_node value[key]
+                        # We don't add a coma for url and emails, because we put it in value (value = url, >>)
+                        if typeof value[key] is 'string' and ((/^(http|https):\/\/[^\s]+$/i.test(value[key]) or /^[a-z0-9._-]+@[a-z0-9]+.[a-z0-9._-]{2,4}/i.test(value[key])))
+                            sub_values[sub_values.length-1]['no_comma'] = true
+
+                    if sub_values.length isnt 0
                         sub_values[sub_values.length-1]['no_comma'] = true
 
-                if sub_values.length isnt 0
-                    sub_values[sub_values.length-1]['no_comma'] = true
+                    data =
+                        no_values: false
+                        values: sub_values
 
-                data =
-                    no_values: false
-                    values: sub_values
+                    if sub_values.length is 0
+                        data.no_value = true
 
-                if sub_values.length is 0
-                    data.no_value = true
-
-                return @template_json_tree.object data
+                    return @template_json_tree.object data
             else if value_type is 'number'
                 return @template_json_tree.span
                     classname: 'jt_num'
@@ -3133,17 +3141,17 @@ module 'DataExplorerView', ->
             else if value is undefined
                 data['value'] = 'undefined'
                 data['classname'] = 'jta_undefined'
-            else if value.constructor? and value.constructor is Array
+            else if Object::toString.call(value) is '[object Array]'
                 if value.length is 0
                     data['value'] = '[ ]'
                     data['classname'] = 'empty array'
                 else
                     data['value'] = '[ ... ]'
                     data['data_to_expand'] = JSON.stringify(value)
-            else if value_type is 'object' and value.$reql_type$ is 'TIME' and value.epoch_time?
+            else if Object::toString.call(value) is '[object Object]' and value.$reql_type$ is 'TIME'
                 data['value'] = @date_to_string(value)
                 data['classname'] = 'jta_date'
-            else if value_type is 'object'
+            else if Object::toString.call(value) is '[object Object]'
                 data['value'] = '{ ... }'
                 data['is_object'] = true
             else if value_type is 'number'
@@ -3272,6 +3280,7 @@ module 'DataExplorerView', ->
         events: ->
             _.extend super,
                 'click .activate_profiler': 'activate_profiler'
+                'click .hide_grouped_data_warning': 'hide_grouped_data_warning'
 
         current_result: []
 
@@ -3338,10 +3347,25 @@ module 'DataExplorerView', ->
         tag_record: (doc, i) =>
             doc.record = @metadata.skip_value + i
 
+        # Hide the warning and save in localStorage that the user hided it
+        hide_grouped_data_warning: (e) =>
+            e.preventDefault()
+            if window.localStorage?
+                window.localStorage.hide_grouped_data_warning = "hide"
+            @$('.grouped_data_warning').slideUp 'fast'
+
         render_result: (args) =>
             if args? and args.results isnt undefined
                 @results = args.results
                 @results_array = null # if @results is not an array (possible starting from 1.4), we will transform @results_array to [@results] for the table view
+
+                # Check if we have a GROUPED_DATA
+                if Object::toString.call(@results) is '[object Object]' and @results.$reql_type$ is 'GROUPED_DATA'
+                    @grouped_data = true # Save that the current result is a GROUPED_DATA
+                    @results = @replace_grouped_data @results # Replace the raw pseudo type with a native object (like in the driver)
+                else
+                    @grouped_data = false
+
             if args? and args.profile isnt undefined
                 @profile = args.profile
             if args?.metadata?
@@ -3369,7 +3393,7 @@ module 'DataExplorerView', ->
                 execution_time_pretty: @metadata.execution_time_pretty
                 no_results: @metadata.has_more_data isnt true and @results?.length is 0 and @metadata.skip_value is 0
                 num_results: num_results
-
+                grouped_data: @grouped_data and @view isnt 'profile' and window.localStorage?.hide_grouped_data_warning isnt "hide"
 
             # Set the text to copy
             @$('.copy_profile').attr('data-clipboard-text', JSON.stringify(@profile, null, 2))

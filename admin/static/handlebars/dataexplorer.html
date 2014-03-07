@@ -217,6 +217,13 @@ Sorry, the data explorer does not support your browser. Please upgrade it. See t
     </div>
     <div class="wrapper_scrollbar"><div class="scrollbar_fake_content"></div></div>
     <div class="tab-content">  
+        {{#if grouped_data}}
+        <div class="info grouped_data_warning">
+        <a class="hide_grouped_data_warning" href="#">&times;</a>
+        Any command chained after <code>group</code> will be applied to each reduction.<br/>
+        Add a call to <code>ungroup</code> if you want to execute a method on all the groups.
+        </div>
+        {{/if}}
         <div class="results profile_view_container">
             <div class="results_wrap profile_view">
                 <div class="profile_summary_container"></div>
