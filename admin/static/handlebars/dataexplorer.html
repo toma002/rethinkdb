@@ -220,8 +220,7 @@ Sorry, the data explorer does not support your browser. Please upgrade it. See t
         {{#if grouped_data}}
         <div class="info grouped_data_warning">
         <a class="hide_grouped_data_warning" href="#">&times;</a>
-        Any command chained after <code>group</code> will be applied to each reduction.<br/>
-        Add a call to <code>ungroup</code> if you want to execute a method on all the groups.
+        Commands chained after <code>group</code> will operate on each reduction. Call <code>ungroup</code> to operate on the array of groups.
         </div>
         {{/if}}
         <div class="results profile_view_container">
